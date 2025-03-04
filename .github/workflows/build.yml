@@ -86,6 +86,17 @@ jobs:
           sep-tags: " "
           sep-annotations: " "
 
+      - name: Determine kernel version and pass it to subsequent steps
+        id: find_kernel_version
+        run: |
+          export BAZZITE_TAG=stable
+          export KERNEL_FLAVOR=bazzite
+          export KERNEL_VERSION=$(skopeo inspect docker://ghcr.io/ublue-os/bazzite:$BAZZITE_TAG | jq -r .Labels.\"ostree.linux\")
+          export FEDORA_MAJOR_VERSION=$(echo "$KERNEL_VERSION" | rev | cut -f2 -d. | rev | tr -d "fc")
+
+          echo "BAZZITE_TAG=$BAZZITE_TAG" >> "$GITHUB_OUTPUT"
+          echo "AKMODSEXTRA_TAG=${KERNEL_FLAVOR}-${FEDORA_MAJOR_VERSION}-${KERNEL_VERSION}" >> "$GITHUB_OUTPUT"
+
       - name: Build Image
         id: build_image
         uses: redhat-actions/buildah-build@v2
@@ -98,6 +109,9 @@ jobs:
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
           oci: false
+          build-args: |
+            BAZZITE_TAG=${{ steps.find_kernel_version.outputs.BAZZITE_TAG }}
+            AKMODSEXTRA_TAG=${{ steps.find_kernel_version.outputs.AKMODSEXTRA_TAG }}
 
       # Rechunk is a script that we use on Universal Blue to make sure there isnt a single huge layer when your image gets published.
       # This does not make your image faster to download, just provides better resumability and fixes a few errors.
